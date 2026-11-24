@@ -41,6 +41,11 @@
   #amount { flex: 1; min-width: 0; font-size: 34px; font-weight: 700; border: 0; outline: 0; background: transparent; color: var(--text); padding: 4px 0; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
   .chip { border: 1px solid transparent; background: var(--chip); color: var(--text); border-radius: 999px; padding: 8px 12px; font-size: 15px; }
+  .chip.new { background: transparent; border: 1px dashed var(--muted); color: var(--muted); }
+  .chip.removable { font-size: 14px; }
+  .hint { color: var(--muted); font-size: 14px; }
+  #myCats { margin-top: 0; }
+  #myCats + h2 { margin-top: 16px; }
   .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
   #note { width: 100%; border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 15px; }
   #add { width: 100%; margin-top: 12px; border: 0; border-radius: 12px; padding: 14px; font-size: 17px; font-weight: 700; background: var(--accent); color: var(--accent-ink); }
@@ -102,6 +107,8 @@
 </section>
 
 <section class="card">
+  <h2>Your categories</h2>
+  <div class="chips" id="myCats"></div>
   <h2>Settings</h2>
   <div class="tools">
     <select id="currency" aria-label="Currency">
@@ -119,13 +126,16 @@
 <script>
 (() => {
   const CATS = ["Food", "Transport", "Bills", "Shopping", "Health", "Fun", "Other"];
-  const KEY = "expenses.v1", CUR = "expenses.currency";
+  const KEY = "expenses.v1", CUR = "expenses.currency", MYCATS = "expenses.categories";
 
   // --- storage (wrapped: storage can be unavailable in some browsers) ---
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
   const save = (xs) => { try { localStorage.setItem(KEY, JSON.stringify(xs)); return true; } catch { return false; } };
   let items = load();
   let cur = (() => { try { return localStorage.getItem(CUR) || "$"; } catch { return "$"; } })();
+  let myCats = (() => { try { return JSON.parse(localStorage.getItem(MYCATS)) || []; } catch { return []; } })();
+  const saveCats = () => { try { localStorage.setItem(MYCATS, JSON.stringify(myCats)); } catch {} };
+  const allCats = () => CATS.concat(myCats);
   let cat = CATS[0];
   let view = new Date(); view.setDate(1);
 
@@ -139,13 +149,46 @@
   const toast = (msg) => { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 1600); };
 
   // --- category chips ---
-  CATS.forEach((c) => {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "chip"; b.textContent = c;
-    b.setAttribute("aria-pressed", c === cat);
-    b.onclick = () => { cat = c; [...$("chips").children].forEach((x) => x.setAttribute("aria-pressed", x.textContent === c)); };
-    $("chips").appendChild(b);
-  });
+  function renderChips() {
+    const box = $("chips"); box.innerHTML = "";
+    if (!allCats().includes(cat)) cat = CATS[0];
+    allCats().forEach((c) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = c;
+      b.setAttribute("aria-pressed", c === cat);
+      b.onclick = () => { cat = c; [...box.querySelectorAll(".chip:not(.new)")].forEach((x) => x.setAttribute("aria-pressed", x.textContent === c)); };
+      box.appendChild(b);
+    });
+    const add = document.createElement("button");
+    add.type = "button"; add.className = "chip new"; add.textContent = "+ New";
+    add.setAttribute("aria-label", "New category");
+    add.onclick = () => {
+      const name = (prompt("New category name") || "").trim().replace(/\s+/g, " ").slice(0, 20);
+      if (!name) return;
+      const existing = allCats().find((c) => c.toLowerCase() === name.toLowerCase());
+      if (existing) { cat = existing; renderChips(); toast(`${existing} already exists`); return; }
+      myCats.push(name); saveCats(); cat = name; renderChips(); renderMyCats();
+      toast(`Added category ${name}`);
+    };
+    box.appendChild(add);
+  }
+
+  // Settings: your own categories, removable (old expenses keep their label)
+  function renderMyCats() {
+    const box = $("myCats"); box.innerHTML = "";
+    if (!myCats.length) { box.innerHTML = '<span class="hint">Add your own with “+ New” above.</span>'; return; }
+    myCats.forEach((c) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "chip removable"; b.textContent = c + "  ✕";
+      b.setAttribute("aria-label", `Remove category ${c}`);
+      b.onclick = () => {
+        if (!confirm(`Remove category “${c}”? Expenses already in it are kept.`)) return;
+        myCats = myCats.filter((x) => x !== c); saveCats(); renderChips(); renderMyCats();
+      };
+      box.appendChild(b);
+    });
+  }
+  renderChips();
 
   const parseAmount = () => {
     const v = parseFloat(($("amount").value || "").replace(",", "."));
@@ -272,6 +315,7 @@
     toast(`Imported ${added}` + (dup ? ` · ${dup} already here` : "") + (bad ? ` · ${bad} unreadable` : ""));
   };
 
+  renderMyCats();
   render();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 })();

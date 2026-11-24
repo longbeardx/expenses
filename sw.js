@@ -1,6 +1,6 @@
 // Offline support, network first: when online you always get the newest
 // version on the first open; offline (or after 3 s) the cached copy is used.
-const CACHE = "expenses-v2";
+const CACHE = "expenses-v3";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) =>
